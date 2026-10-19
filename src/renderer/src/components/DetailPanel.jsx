@@ -34,32 +34,65 @@ const repoShortcuts = (path) => [
   { kind: 'openTerminal', label: 'Terminal', path }
 ]
 
-function Devices() {
+const TYPE_ICON = {
+  Router: '📶', Printer: '🖨', 'Smart display': '🖼', 'TV / streamer': '📺', Speaker: '🔊',
+  Computer: '💻', 'Phone / tablet': '📱', 'Apple device': '', 'Smart home': '🏠', 'Amazon device': '🔵', 'Google device': '🔵'
+}
+
+function Devices({ scanAt }) {
   const [devices, setDevices] = useState([])
-  useEffect(() => { window.mc.getDevices().then(setDevices) }, [])
+  const [scanning, setScanning] = useState(false)
+  useEffect(() => { window.mc.getDevices().then(setDevices) }, [scanAt])
   const save = async (d, patch) => setDevices(await window.mc.setDevice(d.mac, { name: d.name, known: d.known, ...patch }))
+  const rescan = async () => {
+    setScanning(true)
+    try { await window.mc.rerun('net.devices'); setDevices(await window.mc.getDevices()) } finally { setScanning(false) }
+  }
   const unknown = devices.filter((d) => !d.known).length
+  // Online now first, then named before unnamed.
+  const rows = [...devices].sort((a, b) => (b.lastSeen === scanAt) - (a.lastSeen === scanAt) ||
+    !!(b.name || b.discName) - !!(a.name || a.discName) || a.displayName.localeCompare(b.displayName))
+
   return (
     <div>
-      <div className="flex items-center mb-2">
+      <div className="flex items-center gap-2 mb-2">
         <span className="text-xs text-zinc-400">{devices.length} devices seen · {unknown} not marked known</span>
+        <button onClick={rescan} disabled={scanning}
+          className="ml-auto text-[11px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50">
+          {scanning ? 'Scanning… (~20s)' : '↻ Rescan'}
+        </button>
         {unknown > 0 && (
           <button onClick={async () => setDevices(await window.mc.markAllKnown())}
-            className="ml-auto text-[11px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700">Mark all known</button>
+            className="text-[11px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700">Mark all known</button>
         )}
       </div>
-      <Table rows={devices} cols={[
+      <p className="text-[11px] text-zinc-500 mb-2">
+        Names come from what devices announce (Bonjour/mDNS, UPnP, Windows names). Type a name to override; leave blank to keep the discovered one.
+      </p>
+      <Table rows={rows} cols={[
         { label: '', render: (d) => <input type="checkbox" checked={d.known} onChange={(e) => save(d, { known: e.target.checked })} title="Known device" /> },
         {
-          label: 'Name', render: (d) => (
-            <input defaultValue={d.name ?? ''} placeholder={d.vendor}
-              onBlur={(e) => e.target.value !== (d.name ?? '') && save(d, { name: e.target.value })}
-              className="bg-transparent border-b border-zinc-800 focus:border-sky-500 outline-none w-32 placeholder:text-zinc-600" />
+          label: 'Device', render: (d) => (
+            <div className={d.lastSeen === scanAt ? '' : 'opacity-50'}>
+              <div className="flex items-center gap-1.5">
+                <span className="w-4 text-center">{TYPE_ICON[d.type] ?? '·'}</span>
+                <input key={d.name ?? ''} defaultValue={d.name ?? ''} placeholder={d.discName || d.vendor}
+                  onBlur={(e) => e.target.value !== (d.name ?? '') && save(d, { name: e.target.value })}
+                  className={`bg-transparent border-b border-transparent hover:border-zinc-800 focus:border-sky-500 outline-none w-52 text-[13px] ${d.discName ? 'placeholder:text-zinc-100' : 'placeholder:text-zinc-500'}`} />
+              </div>
+              <div className="pl-5 text-[11px] text-zinc-500">
+                {[d.type, d.model, d.vendor].filter(Boolean).join(' · ')}
+              </div>
+              {d.services?.length > 0 && (
+                <div className="pl-5 mt-1 flex flex-wrap gap-1">
+                  {d.services.map((s) => <span key={s} className="text-[10px] px-1.5 rounded bg-zinc-800 text-zinc-400">{s}</span>)}
+                </div>
+              )}
+            </div>
           )
         },
-        { label: 'IP', render: (d) => d.ip },
-        { label: 'Vendor', render: (d) => <span className="text-zinc-400">{d.vendor}</span> },
-        { label: 'Last seen', render: (d) => <span className="text-zinc-400">{ago(d.lastSeen)}</span> }
+        { label: 'IP', render: (d) => <span className="tabular-nums">{d.ip}</span> },
+        { label: 'Seen', render: (d) => <span className="text-zinc-400 whitespace-nowrap">{d.lastSeen === scanAt ? 'online' : ago(d.lastSeen)}</span> }
       ]} />
     </div>
   )
@@ -155,7 +188,7 @@ function Details({ result }) {
       ]} />
       : <p className="text-xs text-zinc-500">No outages recorded.</p>
   }
-  if (id === 'net.devices') return <Devices />
+  if (id === 'net.devices') return <Devices scanAt={d.scanAt} />
   if (d.line) return <pre className="text-xs text-red-300 whitespace-pre-wrap selectable">{d.line}</pre>
   if (Object.keys(d).length === 0) return null
   return <pre className="text-[11px] text-zinc-400 whitespace-pre-wrap selectable">{JSON.stringify(d, null, 2)}</pre>
@@ -174,7 +207,7 @@ export default function DetailPanel({ result, alert, onClose, onChanged }) {
   const muteValue = alert?.muteUntilRecover ? 'recover' : isMuted(alert) ? 'day' : 'off'
 
   return (
-    <aside className="w-[420px] shrink-0 border-l border-zinc-800 bg-[#0d1017] overflow-y-auto">
+    <aside className={`${result.id === 'net.devices' ? 'w-[640px]' : 'w-[420px]'} shrink-0 border-l border-zinc-800 bg-[#0d1017] overflow-y-auto`}>
       <div className="p-5 space-y-5">
         <div className="flex items-start gap-3">
           <span className={`mt-1.5 w-2.5 h-2.5 rounded-full ${s.dot}`} />

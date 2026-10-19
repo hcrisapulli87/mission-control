@@ -2,6 +2,7 @@
 // through these, which keeps every check unit-testable with fakes.
 import { execFile } from 'child_process'
 import { promises as fsp, existsSync } from 'fs'
+import { discover } from './discovery.js'
 
 export function exec(file, args = [], { timeoutMs = 25_000, cwd, shell = false, maxBuffer = 20 * 1024 * 1024 } = {}) {
   return new Promise((resolve) => {
@@ -72,6 +73,7 @@ export function makeCtxFactory({ db, getSettings, now = Date.now }) {
     powershell,
     fs,
     http,
+    discover: (devices) => discover({ devices, exec, http }),
     now,
     db,
     settings: getSettings(),

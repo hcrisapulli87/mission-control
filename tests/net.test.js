@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parsePing, parseGateway, parseArp, subnetHosts, speedVerdict, vendorFor, normMac, median } from '../src/main/checks/net.js'
+import { parsePing, parseGateway, parseArp, subnetHosts, speedVerdict, vendorFor, normMac, median, mergeDiscovery } from '../src/main/checks/net.js'
 
 const PING_OK = `
 Pinging 1.1.1.1 with 32 bytes of data:
@@ -79,5 +79,21 @@ describe('speedVerdict', () => {
     expect(speedVerdict(90, [200, 210, 190], 0.5)).toBe('warn')
     expect(speedVerdict(150, [200, 210, 190], 0.5)).toBe('ok')
     expect(speedVerdict(10, [], 0.5)).toBe('ok')
+  })
+})
+
+describe('mergeDiscovery', () => {
+  const prev = { discName: 'LPT-BD-HARRISON', model: null, services: ['Printing', 'Chromecast'], source: 'NetBIOS' }
+  it('quiet device keeps everything', () => {
+    expect(mergeDiscovery(prev, undefined)).toEqual({ discName: 'LPT-BD-HARRISON', model: null, services: ['Printing', 'Chromecast'], source: 'NetBIOS' })
+  })
+  it('answering device replaces services but keeps a known name', () => {
+    expect(mergeDiscovery(prev, { name: null, model: null, services: ['Spotify'], source: 'mDNS' }))
+      .toEqual({ discName: 'LPT-BD-HARRISON', model: null, services: ['Spotify'], source: 'mDNS' })
+  })
+  it('first sighting', () => {
+    expect(mergeDiscovery(undefined, { name: 'Kitchen Display', model: 'Nest Hub Max', services: ['Chromecast'], source: 'mDNS' }))
+      .toEqual({ discName: 'Kitchen Display', model: 'Nest Hub Max', services: ['Chromecast'], source: 'mDNS' })
+    expect(mergeDiscovery(undefined, undefined)).toEqual({ discName: null, model: null, services: null, source: null })
   })
 })

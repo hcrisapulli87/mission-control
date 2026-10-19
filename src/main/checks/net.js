@@ -1,6 +1,7 @@
 import { result, unknown } from '../status.js'
 import { fmtDuration } from '../format.js'
 import OUI from '../oui.json'
+import { deviceType } from '../discovery.js'
 
 export function parsePing(text) {
   const recv = /Received = (\d+)/.exec(text)
@@ -50,6 +51,25 @@ export function vendorFor(mac) {
   const first = parseInt(mac.slice(0, 2), 16)
   if (first & 0b10) return 'Private (randomised) MAC' // locally-administered bit
   return OUI[mac.replace(/:/g, '').slice(0, 6)] ?? 'Unknown vendor'
+}
+
+/**
+ * Combine this scan's discovery with what we knew. A device that answered gets
+ * its services replaced (so stale/wrong lists clear) but keeps a previously
+ * found name/model if it didn't repeat them. A quiet device keeps everything.
+ */
+export function mergeDiscovery(prev, found) {
+  const keep = {
+    discName: prev?.discName ?? null, model: prev?.model ?? null,
+    services: prev?.services?.length ? prev.services : null, source: prev?.source ?? null
+  }
+  if (!found) return keep
+  return {
+    discName: found.name ?? keep.discName,
+    model: found.model ?? keep.model,
+    services: found.services ?? [],
+    source: found.source ?? keep.source
+  }
 }
 
 export function median(xs) {
@@ -143,15 +163,26 @@ export const netChecks = [
       // Ping sweep fills the ARP cache; replies themselves don't matter.
       await pool(subnetHosts(gw.gateway, gw.iface), 32, (ip) => ping(ctx, ip, 500))
       const seen = parseArp((await ctx.exec('arp', ['-a', '-N', gw.iface])).stdout)
+        .map((d) => ({ ...d, vendor: vendorFor(d.mac) }))
+      // Names/models/services from what devices announce (mDNS, UPnP, NetBIOS).
+      let found = {}
+      try { found = await ctx.discover(seen) } catch { /* discovery is best-effort */ }
       const now = ctx.now()
-      for (const d of seen) ctx.db.upsertDevice({ ...d, vendor: vendorFor(d.mac), ts: now })
+      const prev = new Map(ctx.db.getDevices().map((x) => [x.mac, x]))
+      for (const d of seen) {
+        const m = mergeDiscovery(prev.get(d.mac), found[d.ip])
+        const type = deviceType({ vendor: d.vendor, services: m.services ?? [], model: m.model ?? '', name: m.discName ?? '', isGateway: d.ip === gw.gateway })
+        ctx.db.upsertDevice({ ...d, ts: now, ...m, type })
+      }
       const all = ctx.db.getDevices()
       const unknownDevices = all.filter((d) => !d.known && d.lastSeen === now)
       const onlineCount = seen.length
+      const named = all.filter((d) => d.lastSeen === now && (d.name || d.discName)).length
+      const details = { devices: all, scanAt: now, gateway: gw.gateway }
+      const label = (d) => (d.name || d.discName ? `${d.displayName}${d.type ? ` (${d.type})` : ''}` : d.type ? `${d.type} · ${d.vendor}` : d.vendor)
       return unknownDevices.length
-        ? result('warn', `${onlineCount} online · ${unknownDevices.length} not marked known (${[...new Set(unknownDevices.map((d) => d.name || d.vendor))].slice(0, 3).join(', ')})`,
-          { details: { devices: all, scanAt: now, gateway: gw.gateway } })
-        : result('ok', `${onlineCount} online · all known`, { details: { devices: all, scanAt: now, gateway: gw.gateway } })
+        ? result('warn', `${onlineCount} online · ${unknownDevices.length} not marked known: ${[...new Set(unknownDevices.map(label))].slice(0, 3).join(', ')}`, { details })
+        : result('ok', `${onlineCount} online · all known · ${named} identified by name`, { details })
     }
   }
 ]

@@ -62,6 +62,22 @@ describe('db', () => {
     expect(db.getDevices()[0]).toMatchObject({ mac: 'aa', ip: '2', name: 'Phone', known: true, firstSeen: 1, lastSeen: 5 })
   })
 
+  it('stores discovered fields; user name wins', () => {
+    const { db } = mk()
+    db.upsertDevice({ mac: 'bb', ip: '1', vendor: 'Google', ts: 1, discName: 'Kitchen Display', model: 'Nest Hub Max', type: 'Smart display', services: ['Chromecast'], source: 'mDNS' })
+    expect(db.getDevices()[0]).toMatchObject({ discName: 'Kitchen Display', model: 'Nest Hub Max', type: 'Smart display', services: ['Chromecast'], displayName: 'Kitchen Display', lastSeen: 1 })
+    db.setDeviceMeta('bb', { name: 'Nest', known: true })
+    expect(db.getDevices()[0].displayName).toBe('Nest')
+  })
+
+  it('migrates an old devices table in place', () => {
+    const old = new SQL.Database()
+    old.exec('CREATE TABLE devices (mac TEXT PRIMARY KEY, ip TEXT, vendor TEXT, name TEXT, known INTEGER DEFAULT 0, first_seen INTEGER, last_seen INTEGER)')
+    old.exec("INSERT INTO devices VALUES ('cc','1','Amazon',NULL,1,1,1)")
+    const { db } = mk({ bytes: old.export() })
+    expect(db.getDevices()[0]).toMatchObject({ mac: 'cc', known: true, discName: null, services: [] })
+  })
+
   it('token hashes, alerts and kv', () => {
     const { db } = mk()
     expect(db.getTokenHash('t')).toBeNull()

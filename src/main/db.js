@@ -31,6 +31,16 @@ const parse = (s, fallback) => {
   try { return JSON.parse(s) } catch { return fallback }
 }
 
+// Columns added after v1 — added in place so existing databases keep their data.
+const DEVICE_COLUMNS = { disc_name: 'TEXT', model: 'TEXT', type: 'TEXT', services_json: 'TEXT', disc_source: 'TEXT' }
+
+function migrate(db) {
+  const have = new Set((db.exec('PRAGMA table_info(devices)')[0]?.values ?? []).map((r) => r[1]))
+  for (const [col, type] of Object.entries(DEVICE_COLUMNS)) {
+    if (!have.has(col)) db.exec(`ALTER TABLE devices ADD COLUMN ${col} ${type}`)
+  }
+}
+
 export function openDb({ SQL, load, save, onCorrupt }) {
   let db
   const bytes = load()
@@ -42,6 +52,7 @@ export function openDb({ SQL, load, save, onCorrupt }) {
     db = new SQL.Database()
     db.exec(SCHEMA)
   }
+  migrate(db)
 
   const all = (sql, params = []) => {
     const stmt = db.prepare(sql)
@@ -120,17 +131,25 @@ export function openDb({ SQL, load, save, onCorrupt }) {
       return data
     },
 
-    upsertDevice({ mac, ip, vendor, ts }) {
+    // Discovered fields are written as given; the caller merges in last-known
+    // values for devices that stayed quiet this scan (see net.devices).
+    upsertDevice({ mac, ip, vendor, ts, discName = null, model = null, type = null, services = null, source = null }) {
       run(
-        `INSERT INTO devices (mac, ip, vendor, name, known, first_seen, last_seen) VALUES (?,?,?,NULL,0,?,?)
-         ON CONFLICT(mac) DO UPDATE SET ip=excluded.ip, vendor=excluded.vendor, last_seen=excluded.last_seen`,
-        [mac, ip, vendor, ts, ts]
+        `INSERT INTO devices (mac, ip, vendor, name, known, first_seen, last_seen, disc_name, model, type, services_json, disc_source)
+         VALUES (?,?,?,NULL,0,?,?,?,?,?,?,?)
+         ON CONFLICT(mac) DO UPDATE SET ip=excluded.ip, vendor=excluded.vendor, last_seen=excluded.last_seen,
+           disc_name=excluded.disc_name, model=excluded.model, type=excluded.type,
+           services_json=excluded.services_json, disc_source=excluded.disc_source`,
+        [mac, ip, vendor, ts, ts, discName, model, type, services ? JSON.stringify(services) : null, source]
       )
     },
     getDevices() {
       return all('SELECT * FROM devices ORDER BY last_seen DESC').map((d) => ({
         mac: d.mac, ip: d.ip, vendor: d.vendor, name: d.name, known: !!d.known,
-        firstSeen: d.first_seen, lastSeen: d.last_seen
+        firstSeen: d.first_seen, lastSeen: d.last_seen,
+        discName: d.disc_name, model: d.model, type: d.type,
+        services: parse(d.services_json, []), source: d.disc_source,
+        displayName: d.name || d.disc_name || d.vendor
       }))
     },
     setDeviceMeta(mac, { name, known }) {
