@@ -3,7 +3,7 @@ import { guideFor, buildClaudePrompt, assistCwd } from '../src/main/guides.js'
 
 const paths = { root: 'C:\\cc', bot: 'C:\\cc\\bot' }
 const r = (id, status, extra = {}) => ({ id, title: id, status, summary: 's', details: {}, ...extra })
-const commands = (g) => g.steps.map((s) => s.command).filter(Boolean)
+const commands = (g) => g.steps.flatMap((s) => s.commands ?? [])
 
 describe('guideFor', () => {
   it('no guide when ok', () => {
@@ -22,7 +22,7 @@ describe('guideFor', () => {
     const text = g.steps.map((s) => s.text).join(' ')
     expect(text).toContain('token_gmail.json')
     expect(text).not.toContain('token_tasks.json')
-    expect(commands(g)).toContain('"C:\\cc\\bot\\stop_bot.bat"')
+    expect(commands(g)).toContain('cmd /c "C:\\cc\\bot\\stop_bot.bat"')
   })
 
   it('unpushed: plain push vs first push with upstream', () => {
@@ -30,14 +30,14 @@ describe('guideFor', () => {
       details: { repos: [{ name: 'tally', path: 'C:\\cc\\tally', unpushed: [{ branch: 'main', ahead: 2 }, { branch: 'feat/x', ahead: null }] }] }
     }), paths)
     expect(commands(g)).toEqual([
-      'cd /d "C:\\cc\\tally" && git push',
-      'cd /d "C:\\cc\\tally" && git push -u origin feat/x'
+      'cd "C:\\cc\\tally"', 'git push',
+      'cd "C:\\cc\\tally"', 'git push -u origin feat/x'
     ])
   })
 
   it('no remote: suggests the matching GitHub repo name', () => {
     const g = guideFor(r('code.noremote', 'warn', { details: { repos: [{ name: 'cinevault', path: 'C:\\cc\\cinevault' }] } }), paths)
-    expect(commands(g)[0]).toContain('git remote add origin https://github.com/hcrisapulli87/cinevault.git')
+    expect(commands(g)).toContain('git remote add origin https://github.com/hcrisapulli87/cinevault.git')
   })
 
   it('never suggests force flags', () => {
@@ -45,6 +45,21 @@ describe('guideFor', () => {
     for (const id of ids) {
       const g = guideFor(r(id, 'warn', { details: { repos: [{ name: 'a', path: 'C:\\cc\\a', unpushed: [], unmerged: ['f'], stale: [] }], audits: [{ name: 'a', path: 'C:\\cc\\a', status: 'fail' }] } }), paths)
       for (const c of commands(g)) expect(c).not.toMatch(/--force|-D\b|reset --hard/)
+    }
+  })
+
+  it('every command works in both PowerShell 5.1 and cmd.exe', () => {
+    const ids = ['bot.process', 'bot.activity', 'bot.crashloop', 'bot.auth', 'google.tokens', 'code.nogit', 'code.dirty',
+      'code.noremote', 'code.unpushed', 'code.branches', 'code.audit', 'cloud.vercel', 'cloud.uptime', 'cloud.supabase',
+      'cloud.apikeys', 'pc.gpu', 'pc.cpu', 'pc.ram', 'pc.disks', 'pc.restart', 'net.internet', 'net.gateway', 'net.speed', 'net.devices']
+    const details = { repos: [{ name: 'a', path: 'C:\\cc\\a', dirty: 1, unpushed: [{ branch: 'main', ahead: 1 }], unmerged: ['f'], stale: [] }],
+      audits: [{ name: 'a', path: 'C:\\cc\\a', status: 'fail' }], tokens: [{ file: 't.json', status: 'fail' }] }
+    for (const id of ids) {
+      for (const c of commands(guideFor(r(id, 'fail', { details }), paths))) {
+        expect(c, id).not.toMatch(/&&|\|\||;\s/) // PowerShell 5.1 has no && / ||; ; means something else in cmd
+        expect(c, id).not.toMatch(/^\s*"/)      // PowerShell prints a quoted path instead of running it
+        expect(c, id).not.toMatch(/cd \/d/)     // /d is cmd-only
+      }
     }
   })
 

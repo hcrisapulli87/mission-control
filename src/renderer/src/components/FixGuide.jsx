@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Shortcuts from './Shortcuts'
 
-function CommandBox({ command }) {
+function CommandBox({ command, label }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     await window.mc.runShortcut({ kind: 'copy', label: 'Copy', text: command })
@@ -10,6 +10,7 @@ function CommandBox({ command }) {
   }
   return (
     <div className="mt-1.5 flex items-start gap-2 rounded bg-black/40 ring-1 ring-zinc-800 px-2.5 py-1.5">
+      {label && <span className="text-[10px] text-zinc-500 pt-0.5">{label}</span>}
       <code className="flex-1 text-[11px] text-sky-200 break-all selectable">{command}</code>
       <button onClick={copy} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 shrink-0">
         {copied ? 'Copied' : 'Copy'}
@@ -42,7 +43,9 @@ export default function FixGuide({ result }) {
               <span className="w-5 h-5 shrink-0 rounded-full bg-zinc-800 text-[11px] grid place-items-center text-zinc-300">{i + 1}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-zinc-200 selectable">{s.text}</p>
-                {s.command && <CommandBox command={s.command} />}
+                {s.commands?.length > 1 && <p className="mt-1 text-[11px] text-zinc-500">Run each line in order. If one fails, stop there and use Ask Claude.</p>}
+                {s.commands?.map((c) => <CommandBox key={c} command={c} />)}
+                {s.sql && <CommandBox command={s.sql} label="SQL" />}
                 {s.url && (
                   <div className="mt-1.5"><Shortcuts shortcuts={[{ kind: 'openUrl', label: 'Open link', url: s.url }]} /></div>
                 )}

@@ -6,23 +6,27 @@ import { join } from 'path'
 const GITHUB_USER = 'hcrisapulli87'
 
 const step = (text, extra = {}) => ({ text, ...extra })
-const inDir = (path, cmd) => `cd /d "${path}" && ${cmd}`
+// Every command line must work in BOTH Windows PowerShell 5.1 (the default
+// terminal) and cmd.exe: no && or ; chaining, and never start a line with a
+// quoted path (PowerShell just prints it). Multi-step fixes are separate lines.
+const inDir = (path, ...cmds) => [`cd "${path}"`, ...cmds]
+const runBat = (path) => `cmd /c "${path}"`
 const repos = (r) => r.details?.repos ?? []
 
 function botStart(bot) {
-  return step('Start the bot (paste into a terminal — it runs hidden).', { command: `wscript "${join(bot, 'launch_hidden.vbs')}"` })
+  return step('Start the bot (paste into a terminal — it runs hidden).', { commands: [`wscript "${join(bot, 'launch_hidden.vbs')}"`] })
 }
 
 function reauth(bot, files) {
   const which = files?.length ? files.join(', ') : 'the token_*.json named in the error (or all three if unsure)'
   return [
-    step('Stop the bot and its restart loop.', { command: `"${join(bot, 'stop_bot.bat')}"` }),
+    step('Stop the bot and its restart loop.', { commands: [runBat(join(bot, 'stop_bot.bat'))] }),
     step(`In the bot folder, delete ${which}. Only the token files — leave credentials.json and .env alone.`,
       { shortcut: { kind: 'openPath', label: 'Open bot folder', path: bot } }),
     step('Run the bot once in a visible terminal. A browser window opens for each deleted token — sign in and click Allow.',
-      { command: inDir(bot, 'venv\\Scripts\\python.exe bot.py') }),
+      { commands: inDir(bot, 'venv\\Scripts\\python.exe bot.py') }),
     step('When it prints "Bot is online", press Ctrl+C in that terminal, then start it normally (hidden).',
-      { command: `wscript "${join(bot, 'launch_hidden.vbs')}"` }),
+      { commands: [`wscript "${join(bot, 'launch_hidden.vbs')}"`] }),
     step('Press ↻ on the Bot checks. Tokens die every 7 days while the Google OAuth app is in "Testing" — publishing it in Google Cloud Console (OAuth consent screen → Publish app) stops this; then untick Testing mode in Settings.',
       { shortcut: { kind: 'openUrl', label: 'OAuth consent screen', url: 'https://console.cloud.google.com/apis/credentials/consent' } })
   ]
@@ -41,17 +45,17 @@ const GUIDES = {
     step('Wait ~30 seconds, then press ↻ on "Bot process".'),
     step('Still not running? Open launcher.log and read the lines after the last "starting bot". A RefreshError / invalid_grant means a Google token died — follow the Bot Google auth fix.',
       { shortcut: { kind: 'openPath', label: 'Open launcher.log', path: join(bot, 'logs', 'launcher.log') } }),
-    step('If it runs now but did not come back after a reboot, check the Startup folder still has start-household-bot.vbs.', { command: 'explorer shell:startup' })
+    step('If it runs now but did not come back after a reboot, check the Startup folder still has start-household-bot.vbs.', { commands: ['explorer shell:startup'] })
   ],
   'bot.activity': (r, { bot }) => [
     step('If "Bot process" is also failing, fix that first — no process means no logs.'),
-    step('If the process IS running but silent, it may be stuck. Kill it; the restart loop relaunches it with fresh state in ~30s.', { command: 'powershell -NoProfile -Command "Stop-Process -Name pythonw -Force"' }),
-    step('If nothing comes back, start it directly.', { command: `wscript "${join(bot, 'launch_hidden.vbs')}"` })
+    step('If the process IS running but silent, it may be stuck. Kill it; the restart loop relaunches it with fresh state in ~30s.', { commands: ['powershell -NoProfile -Command "Stop-Process -Name pythonw -Force"'] }),
+    step('If nothing comes back, start it directly.', { commands: [`wscript "${join(bot, 'launch_hidden.vbs')}"`] })
   ],
   'bot.crashloop': (r, { bot }) => [
-    step('Stop the loop so it stops hammering.', { command: `"${join(bot, 'stop_bot.bat')}"` }),
+    step('Stop the loop so it stops hammering.', { commands: [runBat(join(bot, 'stop_bot.bat'))] }),
     step('Open launcher.log and read the error after the last "starting bot".', { shortcut: { kind: 'openPath', label: 'Open launcher.log', path: join(bot, 'logs', 'launcher.log') } }),
-    step('RefreshError / invalid_grant → follow the Bot Google auth fix. ModuleNotFoundError → reinstall packages:', { command: inDir(bot, 'venv\\Scripts\\pip install -r requirements.txt') }),
+    step('RefreshError / invalid_grant → follow the Bot Google auth fix. ModuleNotFoundError → reinstall packages:', { commands: inDir(bot, 'venv\\Scripts\\pip install -r requirements.txt') }),
     botStart(bot),
     step('Any other traceback → use Ask Claude below; it gets the log context.')
   ],
@@ -60,34 +64,34 @@ const GUIDES = {
 
   'code.nogit': (r) => [
     step('Check the project has a .gitignore that excludes node_modules/, out/, dist/ and any .env before the first commit.'),
-    ...repos(r).map((x) => step(`Put ${x.name} under git:`, { command: inDir(x.path, 'git init && git add -A && git commit -m "Initial commit"') })),
+    ...repos(r).map((x) => step(`Put ${x.name} under git:`, { commands: inDir(x.path, 'git init', 'git add -A', 'git commit -m "Initial commit"') })),
     step('Then add a GitHub remote (see "Repos without a remote").')
   ],
   'code.dirty': (r) => [
     step('Review what changed in each repo, then commit what should be kept. Files that should never be committed belong in .gitignore.'),
-    ...repos(r).map((x) => step(`${x.name}: ${x.dirty ?? ''} changed file(s)`, { command: inDir(x.path, 'git status') })),
-    step('To commit everything shown: git add -A && git commit -m "your message". Not sure what a change is? Ask Claude.')
+    ...repos(r).map((x) => step(`${x.name}: ${x.dirty ?? ''} changed file(s)`, { commands: inDir(x.path, 'git status') })),
+    step('To commit everything shown, run these one at a time (in the repo folder). Not sure what a change is? Ask Claude.', { commands: ['git add -A', 'git commit -m "your message"'] })
   ],
   'code.noremote': (r) => [
     step('On GitHub create a new EMPTY repository with the same name (do not tick "Add a README" — an empty repo means a plain push works).', { url: 'https://github.com/new' }),
-    ...repos(r).map((x) => step(`${x.name}:`, { command: inDir(x.path, `git remote add origin https://github.com/${GITHUB_USER}/${x.name}.git && git branch -M main && git push -u origin main`) }))
+    ...repos(r).map((x) => step(`${x.name}:`, { commands: inDir(x.path, `git remote add origin https://github.com/${GITHUB_USER}/${x.name}.git`, 'git branch -M main', 'git push -u origin main') }))
   ],
   'code.unpushed': (r) => [
     ...repos(r).flatMap((x) => (x.unpushed ?? []).map((u) => (u.ahead == null
-      ? step(`${x.name}: branch ${u.branch} has never been pushed.`, { command: inDir(x.path, `git push -u origin ${u.branch}`) })
-      : step(`${x.name}: ${u.branch} is ${u.ahead} commit(s) ahead.`, { command: inDir(x.path, 'git push') })))),
+      ? step(`${x.name}: branch ${u.branch} has never been pushed.`, { commands: inDir(x.path, `git push -u origin ${u.branch}`) })
+      : step(`${x.name}: ${u.branch} is ${u.ahead} commit(s) ahead.`, { commands: inDir(x.path, 'git push') })))),
     step('If a push is rejected, the remote has commits you do not have — do not force. Run git pull --rebase first, or Ask Claude.')
   ],
   'code.branches': (r) => [
     step('For each branch: finished work gets merged into main; abandoned work can be deleted.'),
     ...repos(r).flatMap((x) => (x.unmerged ?? []).map((b) => step(`${x.name}: merge ${b}${(x.stale ?? []).includes(b) ? ' (untouched 14+ days)' : ''} into main`,
-      { command: inDir(x.path, `git checkout main && git merge ${b} && git push`) }))),
+      { commands: inDir(x.path, 'git checkout main', `git merge ${b}`, 'git push') }))),
     step('To delete a branch you no longer want, use git branch -d <name> — lowercase -d refuses if the work is unmerged, which is your safety net. Unsure if a branch is done? Ask Claude to compare it with main.')
   ],
   'code.audit': (r) => [
-    ...(r.details?.audits ?? []).filter((a) => a.status !== 'ok').map((a) => step(`${a.name}: apply compatible fixes.`, { command: inDir(a.path, 'npm audit fix') })),
+    ...(r.details?.audits ?? []).filter((a) => a.status !== 'ok').map((a) => step(`${a.name}: apply compatible fixes.`, { commands: inDir(a.path, 'npm audit fix') })),
     step('Press ↻. Anything left needs a major-version upgrade. npm will suggest --force — that can break the app, so run the app\'s tests after, or Ask Claude to do the upgrade carefully.'),
-    step('See exactly which packages are affected:', { command: 'npm audit --omit=dev' })
+    step('See exactly which packages are affected:', { commands: ['npm audit --omit=dev'] })
   ],
 
   'cloud.vercel': (r) => [
@@ -103,7 +107,7 @@ const GUIDES = {
   ],
   'cloud.supabase': () => [
     step('Paused (INACTIVE): open the project dashboard and click "Restore project". Takes ~2 minutes, then press ↻.'),
-    step('Nearly full: find the biggest tables in the SQL Editor:', { command: 'select relname, pg_size_pretty(pg_total_relation_size(relid)) as size from pg_catalog.pg_statio_user_tables order by pg_total_relation_size(relid) desc limit 10;' }),
+    step('Nearly full: find the biggest tables — paste this into Supabase → SQL Editor (not a terminal):', { sql: 'select relname, pg_size_pretty(pg_total_relation_size(relid)) as size from pg_catalog.pg_statio_user_tables order by pg_total_relation_size(relid) desc limit 10;' }),
     step('Old history/cache rows are the usual culprits. Ask Claude before deleting anything.')
   ],
   'cloud.apikeys': () => [
@@ -118,21 +122,21 @@ const GUIDES = {
   ],
 
   'pc.gpu': () => [
-    step('Check what is using the GPU in Task Manager → Performance → GPU.', { command: 'taskmgr' }),
+    step('Check what is using the GPU in Task Manager → Performance → GPU.', { commands: ['taskmgr'] }),
     step('Sustained 85°C+ while gaming: cap the frame rate (NVIDIA App → Max Frame Rate), check case fans spin, and clean dust filters.'),
     step('Hot while idle means something is running in the background — sort Task Manager by GPU.')
   ],
-  'pc.cpu': () => [step('Find the busy process: Task Manager → Processes, sort by CPU.', { command: 'taskmgr' }), step('End or uninstall anything you don\'t recognise or need.')],
-  'pc.ram': () => [step('Find what is using memory: Task Manager → Processes, sort by Memory.', { command: 'taskmgr' }), step('Browsers with many tabs and Electron apps are the usual culprits — close or restart them.')],
+  'pc.cpu': () => [step('Find the busy process: Task Manager → Processes, sort by CPU.', { commands: ['taskmgr'] }), step('End or uninstall anything you don\'t recognise or need.')],
+  'pc.ram': () => [step('Find what is using memory: Task Manager → Processes, sort by Memory.', { commands: ['taskmgr'] }), step('Browsers with many tabs and Electron apps are the usual culprits — close or restart them.')],
   'pc.disks': (r) => [
     ...((r.details?.health ?? []).some((h) => h.status !== 'ok')
       ? [step('A physical disk reports it is not healthy — back up anything important from it NOW, then plan a replacement.')]
       : []),
-    step('Free space: Settings → System → Storage → Temporary files (safe to clear).', { command: 'start ms-settings:storagesense' }),
-    step('Or run Disk Cleanup and tick "Clean up system files".', { command: 'cleanmgr' }),
+    step('Free space: Settings → System → Storage → Temporary files (safe to clear).', { commands: ['start ms-settings:storagesense'] }),
+    step('Or run Disk Cleanup and tick "Clean up system files".', { commands: ['cleanmgr'] }),
     step('Big folders are often old node_modules in projects you no longer work on, game installs, and Downloads.')
   ],
-  'pc.restart': () => [step('Save your work and restart when convenient — updates finish installing during the restart.', { command: 'start ms-settings:windowsupdate' })],
+  'pc.restart': () => [step('Save your work and restart when convenient — updates finish installing during the restart.', { commands: ['start ms-settings:windowsupdate'] })],
 
   'net.internet': () => [
     step('Check the router lights. If "Router" is also failing, power-cycle the router (off 30s, on, wait 2 min).'),
@@ -191,7 +195,9 @@ export function buildClaudePrompt(result, guide, now) {
   let details = JSON.stringify(result.details ?? {}, null, 2)
   if (details.length > MAX_DETAILS) details = details.slice(0, MAX_DETAILS) + '\n… (truncated)'
   const steps = guide?.steps?.length
-    ? guide.steps.map((s, i) => `${i + 1}. ${s.text}${s.command ? `\n   \`${s.command}\`` : ''}`).join('\n')
+    ? guide.steps.map((s, i) => `${i + 1}. ${s.text}` +
+      (s.commands ?? []).map((c) => `\n   \`${c}\``).join('') +
+      (s.sql ? `\n   SQL: \`${s.sql}\`` : '')).join('\n')
     : '(none)'
   return [
     '# Mission Control report',
