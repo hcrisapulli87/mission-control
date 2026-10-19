@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { STATUS_STYLE, ago, fmtTime, isMuted } from '../ui'
 import Shortcuts from './Shortcuts'
 import LineChart from './LineChart'
+import FixGuide from './FixGuide'
 
 const DAY = 86_400_000
 
@@ -187,6 +188,8 @@ export default function DetailPanel({ result, alert, onClose, onChanged }) {
 
         {result.error && <p className="text-xs text-red-300 bg-red-950/40 rounded p-2 selectable">{result.error}</p>}
         {result.shortcuts?.length > 0 && <Shortcuts shortcuts={result.shortcuts} />}
+
+        {result.status !== 'ok' && <FixGuide result={result} />}
 
         <div className="flex items-center gap-2 text-xs">
           <span className="text-zinc-400">Alerts</span>

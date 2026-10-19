@@ -26,6 +26,9 @@ export default function CheckRow({ result, alert, active, onSelect }) {
         <p className={`text-[13px] truncate ${result.status === 'ok' ? 'text-zinc-400' : s.text}`} title={result.summary}>
           {result.summary}
         </p>
+        {result.status !== 'ok' && result.guide && (
+          <button onClick={onSelect} className="mt-1 text-[11px] text-sky-400 hover:text-sky-300">How to fix ›</button>
+        )}
         {result.shortcuts?.length > 0 && result.status !== 'ok' && (
           <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
             <Shortcuts shortcuts={result.shortcuts} />

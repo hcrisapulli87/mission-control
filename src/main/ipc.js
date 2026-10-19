@@ -1,5 +1,6 @@
 import { AREAS } from './checks/index.js'
 import { DEFAULTS } from './settings.js'
+import { guideFor, assistCwd, buildClaudePrompt } from './guides.js'
 
 const DAY = 86_400_000
 
@@ -10,12 +11,18 @@ const DAY = 86_400_000
 export function registerIpc(ipcMain, app) {
   const h = (channel, fn) => ipcMain.handle(channel, (_e, ...args) => fn(...args))
 
-  h('results:get', () => ({
-    areas: AREAS,
-    results: app.db.getResults(),
-    alerts: app.db.getAlerts(),
-    now: Date.now()
-  }))
+  // Non-ok results carry a fix guide and an "Ask Claude" brief, built fresh from
+  // the latest result so paths/branches in the steps are always current.
+  h('results:get', () => {
+    const { paths } = app.getSettings()
+    const now = Date.now()
+    const results = app.db.getResults().map((r) => {
+      const guide = guideFor(r, paths)
+      if (r.status === 'ok') return r
+      return { ...r, guide, assist: { kind: 'askClaude', path: assistCwd(r, paths), prompt: buildClaudePrompt(r, guide, now) } }
+    })
+    return { areas: AREAS, results, alerts: app.db.getAlerts(), now }
+  })
   h('results:rerun', async (id) => {
     if (id) await app.scheduler.runNow(id)
     else await app.scheduler.runAll()

@@ -117,7 +117,12 @@ function codeCheck({ id, title, pick, describe, okText, extraShortcuts }) {
       if (!hits.length) return result('ok', okText, { details: { repos: [] } })
       const names = hits.map((r) => r.name)
       return result('warn', `${describe(hits)}: ${names.slice(0, 4).join(', ')}${names.length > 4 ? ` +${names.length - 4}` : ''}`, {
-        details: { repos: hits.map((r) => ({ name: r.name, path: r.path, info: describeRepo(id, r) })) },
+        details: {
+          repos: hits.map((r) => ({
+            name: r.name, path: r.path, info: describeRepo(id, r),
+            dirty: r.dirty, unpushed: r.unpushed, unmerged: r.unmerged, stale: r.stale
+          }))
+        },
         shortcuts: hits.length === 1 ? repoShortcuts(hits[0], extraShortcuts?.(hits[0]) ?? []) : []
       })
     }

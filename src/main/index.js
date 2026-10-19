@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, clipboard, safeStorage } from 'electron'
 import { join } from 'path'
 import os from 'os'
-import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs'
 import initSqlJs from 'sql.js'
 import { electronApp, is } from '@electron-toolkit/utils'
 
@@ -82,6 +82,14 @@ async function boot() {
   })
 
   const getSettings = () => resolveSettings(db.kvGet('settings', {}), secrets)
+
+  // "Ask Claude" briefs: our own temp files, pruned after a week.
+  const requestsDir = join(userData, 'claude-requests')
+  mkdirSync(requestsDir, { recursive: true })
+  for (const f of readdirSync(requestsDir)) {
+    const p = join(requestsDir, f)
+    if (Date.now() - statSync(p).mtimeMs > 7 * DAY) unlinkSync(p)
+  }
   const launchVbs = join(app.getAppPath(), 'launch.vbs')
 
   // Last known status per check, to detect transitions.
@@ -154,7 +162,10 @@ async function boot() {
       })
       return scanForKeys(sources)
     },
-    runShortcut: (s) => runShortcut(s, { shell, clipboard, exists: existsSync })
+    runShortcut: (s) => runShortcut(s, {
+      shell, clipboard, exists: existsSync, requestsDir,
+      writeFile: (p, text) => writeFileSync(p, text, 'utf8')
+    })
   })
 
   // Launched at Windows logon → stay in the tray; launched by hand → show the dashboard.
