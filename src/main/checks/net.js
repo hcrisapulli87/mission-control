@@ -149,7 +149,7 @@ export const netChecks = [
       const unknownDevices = all.filter((d) => !d.known && d.lastSeen === now)
       const onlineCount = seen.length
       return unknownDevices.length
-        ? result('warn', `${onlineCount} online · ${unknownDevices.length} not marked known (${unknownDevices.slice(0, 3).map((d) => d.vendor).join(', ')})`,
+        ? result('warn', `${onlineCount} online · ${unknownDevices.length} not marked known (${[...new Set(unknownDevices.map((d) => d.name || d.vendor))].slice(0, 3).join(', ')})`,
           { details: { devices: all, scanAt: now } })
         : result('ok', `${onlineCount} online · all known`, { details: { devices: all, scanAt: now } })
     }

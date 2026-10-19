@@ -30,7 +30,7 @@ export const auditChecks = [
       for (const r of repos) {
         if (r.name === '(workspace)' || !ctx.fs.exists(join(r.path, 'package-lock.json'))) continue
         // npm.cmd needs a shell on Windows; args are fixed strings, nothing user-supplied.
-        const { stdout } = await ctx.exec(npm, ['audit', '--json'], { cwd: r.path, timeoutMs: 90_000, shell: true })
+        const { stdout } = await ctx.exec(npm, ['audit', '--json', '--omit=dev'], { cwd: r.path, timeoutMs: 90_000, shell: true })
         const counts = parseAudit(stdout)
         if (counts) rows.push({ name: r.name, path: r.path, ...counts, status: auditVerdict(counts) })
       }

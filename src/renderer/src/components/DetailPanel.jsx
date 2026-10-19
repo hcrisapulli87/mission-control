@@ -53,7 +53,7 @@ function Devices() {
           label: 'Name', render: (d) => (
             <input defaultValue={d.name ?? ''} placeholder={d.vendor}
               onBlur={(e) => e.target.value !== (d.name ?? '') && save(d, { name: e.target.value })}
-              className="bg-transparent border-b border-zinc-800 focus:border-sky-500 outline-none w-32" />
+              className="bg-transparent border-b border-zinc-800 focus:border-sky-500 outline-none w-32 placeholder:text-zinc-600" />
           )
         },
         { label: 'IP', render: (d) => d.ip },
