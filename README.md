@@ -5,7 +5,7 @@ bot and its Google tokens, every project in `claudecode/`, Vercel/Supabase/API k
 PC health, and the home network. Windows notification when something **starts**
 failing; a reminder once a day while it stays broken.
 
-Spec: `../docs/superpowers/specs/2026-10-19-mission-control-design.md`
+Design: [docs/design.md](docs/design.md) · Plan: [docs/plan.md](docs/plan.md)
 
 ## Run
 
