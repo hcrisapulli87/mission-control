@@ -58,6 +58,19 @@ describe('scheduler', () => {
     expect(s.nextAt('a')).toBe(10000 + 1000)
   })
 
+  it('a slow check does not hold back fast results', async () => {
+    let release
+    const slow = check('slow', () => new Promise((r) => { release = () => r({ status: 'ok' }) }))
+    const fast = check('fast', async () => ({ status: 'ok' }))
+    const { s, ticks } = setup([slow, fast], { flushDelayMs: 5 })
+    const pending = s.tick()
+    await new Promise((r) => setTimeout(r, 30))
+    expect(ticks.flat().map((r) => r.id)).toEqual(['fast'])
+    release()
+    await pending
+    expect(ticks.flat().map((r) => r.id)).toEqual(['fast', 'slow'])
+  })
+
   it('caps concurrency', async () => {
     let inFlight = 0, peak = 0
     const slow = async () => { inFlight++; peak = Math.max(peak, inFlight); await new Promise((r) => setTimeout(r, 5)); inFlight--; return { status: 'ok' } }
