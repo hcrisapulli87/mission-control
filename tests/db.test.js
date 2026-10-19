@@ -48,6 +48,8 @@ describe('db', () => {
     db.addMetric('pc.gpu', 'temp', 50, 10)
     db.addMetric('pc.gpu', 'temp', 60, 20)
     expect(db.getMetrics('pc.gpu', 'temp', 15)).toEqual([{ value: 60, ts: 20 }])
+    db.addMetric('pc.gpu', 'util', 3, 20)
+    expect(db.getMetricNames('pc.gpu')).toEqual(['temp', 'util'])
     db.prune(15)
     expect(db.getMetrics('pc.gpu', 'temp', 0)).toHaveLength(1)
   })

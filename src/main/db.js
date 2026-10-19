@@ -81,6 +81,9 @@ export function openDb({ SQL, load, save, onCorrupt }) {
     addMetric(checkId, name, value, ts) {
       run('INSERT INTO metrics (check_id, name, value, ts) VALUES (?,?,?,?)', [checkId, name, value, ts])
     },
+    getMetricNames(checkId) {
+      return all('SELECT DISTINCT name FROM metrics WHERE check_id=? ORDER BY name', [checkId]).map((r) => r.name)
+    },
     getMetrics(checkId, name, sinceTs) {
       return all('SELECT value, ts FROM metrics WHERE check_id=? AND name=? AND ts>=? ORDER BY ts',
         [checkId, name, sinceTs])

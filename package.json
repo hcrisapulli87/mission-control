@@ -13,8 +13,7 @@
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
-    "sql.js": "^1.10.3",
-    "zustand": "^4.5.2"
+    "sql.js": "^1.10.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
