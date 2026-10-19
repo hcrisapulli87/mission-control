@@ -3,9 +3,9 @@
 import { execFile } from 'child_process'
 import { promises as fsp, existsSync } from 'fs'
 
-export function exec(file, args = [], { timeoutMs = 25_000, cwd, maxBuffer = 20 * 1024 * 1024 } = {}) {
+export function exec(file, args = [], { timeoutMs = 25_000, cwd, shell = false, maxBuffer = 20 * 1024 * 1024 } = {}) {
   return new Promise((resolve) => {
-    execFile(file, args, { cwd, timeout: timeoutMs, windowsHide: true, maxBuffer, encoding: 'utf8' },
+    execFile(file, args, { cwd, shell, timeout: timeoutMs, windowsHide: true, maxBuffer, encoding: 'utf8' },
       (err, stdout, stderr) => {
         const code = err ? (typeof err.code === 'number' ? err.code : -1) : 0
         resolve({ stdout: stdout ?? '', stderr: stderr || (err && code === -1 ? err.message : '') || '', code })
