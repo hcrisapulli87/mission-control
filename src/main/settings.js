@@ -12,6 +12,8 @@ export const DEFAULTS = {
     'everafter-redesign-extract', 'mission-control-data'],
   oauthTesting: true,
   startWithWindows: false,
+  vercelTeamId: '',
+  vercelTeamId: '',
   thresholds: {
     botActivityWarnH: 12,
     botActivityFailH: 48,
