@@ -2,6 +2,7 @@ import { result, unknown } from '../status.js'
 import { fmtDuration } from '../format.js'
 import OUI from '../oui.json'
 import { deviceType } from '../discovery.js'
+import { nvapp } from '../nvidia.js'
 
 export function parsePing(text) {
   const recv = /Received = (\d+)/.exec(text)
@@ -136,9 +137,14 @@ export const netChecks = [
     async run(ctx) {
       const t = ctx.settings.thresholds
       const gpu = ctx.db.getMetrics('pc.gpu', 'util', ctx.now() - 5 * 60_000).at(-1)
-      if (gpu && gpu.value >= t.speedSkipGpuUtil) {
+      // A game can be light on the GPU (League, Roblox) and still lag from a speed
+      // test, so NVIDIA App's "game running" counts as busy too.
+      const game = await nvapp(ctx.http, 'nvapp_overlay_get_current_game_info')
+      const busy = game.ok && game.data?.running ? `${game.data.name ?? 'a game'} running`
+        : gpu && gpu.value >= t.speedSkipGpuUtil ? `GPU busy (${gpu.value}%)` : null
+      if (busy) {
         const prev = ctx.store.get('last', null)
-        return result(prev?.status ?? 'unknown', `Skipped — GPU busy (${gpu.value}%)` + (prev ? ` · last ${prev.down} ↓ / ${prev.up} ↑ Mbps` : ''))
+        return result(prev?.status ?? 'unknown', `Skipped — ${busy}` + (prev ? ` · last ${prev.down} ↓ / ${prev.up} ↑ Mbps` : ''))
       }
       const down = await ctx.http(SPEED_DOWN, { raw: true, timeoutMs: 60_000 })
       if (!down.ok) return unknown(`Speed test failed: ${down.error ?? down.status}`, { networkError: true })

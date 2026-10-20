@@ -188,6 +188,32 @@ function Details({ result }) {
       ]} />
       : <p className="text-xs text-zinc-500">No outages recorded.</p>
   }
+  if (id === 'pc.driver' && d.installed) {
+    const notes = d.releaseNotes
+    return (
+      <div className="space-y-3 text-xs">
+        <Table rows={[d.installed, ...(d.recommended ?? [])]} cols={[
+          { label: 'Driver', render: (r) => (r === d.installed ? 'Installed' : r.name ?? 'Recommended') },
+          { label: 'Version', render: (r) => r.version },
+          { label: 'Channel', render: (r) => r.channel?.replace('_', ' ').toLowerCase() },
+          { label: 'Released', render: (r) => r.releaseDate ?? '—' }
+        ]} />
+        {notes && (
+          <div className="space-y-2 selectable">
+            <p className="text-zinc-300">{notes.releaseNotesAbstract}</p>
+            {(notes.highlights ?? []).map((h) => (
+              <div key={h.title}>
+                <div className="text-zinc-400 font-medium">{h.title}</div>
+                <ul className="list-disc pl-4 text-zinc-400 space-y-0.5">
+                  {h.items.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
   if (id === 'net.devices') return <Devices scanAt={d.scanAt} />
   if (d.line) return <pre className="text-xs text-red-300 whitespace-pre-wrap selectable">{d.line}</pre>
   if (Object.keys(d).length === 0) return null

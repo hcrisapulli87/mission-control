@@ -1,6 +1,7 @@
 import os from 'os'
 import { result, unknown, worst } from '../status.js'
 import { fmtDuration } from '../format.js'
+import { nvapp, driverVerdict, NVAPP_EXE } from '../nvidia.js'
 
 export function parseNvidiaSmi(text) {
   const line = text.split(/\r?\n/).find((l) => l.includes(','))
@@ -64,6 +65,23 @@ export const pcChecks = [
       return result(gpuVerdict(g.temp, ctx.settings.thresholds),
         `${g.temp}°C · ${g.util}% load · ${(g.memUsed / 1024).toFixed(1)}/${(g.memTotal / 1024).toFixed(0)} GB VRAM`,
         { details: g, metrics: { temp: g.temp, util: g.util } })
+    }
+  },
+  {
+    id: 'pc.driver', area: 'pc', title: 'GPU driver', intervalMs: 6 * 3_600_000,
+    async run(ctx) {
+      const st = await nvapp(ctx.http, 'nvapp_client_get_driver_status')
+      if (!st.ok) return unknown(st.code === 'offline' ? 'NVIDIA App not running' : `NVIDIA App: ${st.error}`)
+      const v = driverVerdict(st.data)
+      const details = { installed: st.data.installedDriver, recommended: st.data.recommendedDrivers }
+      if (v.update) {
+        const notes = await nvapp(ctx.http, 'nvapp_client_get_driver_release_notes', { driver: v.update.channel })
+        if (notes.ok) details.releaseNotes = notes.data
+      }
+      return result(v.status, v.summary, {
+        details,
+        shortcuts: v.update && ctx.fs.exists(NVAPP_EXE) ? [{ kind: 'openPath', label: 'Open NVIDIA App', path: NVAPP_EXE }] : []
+      })
     }
   },
   {

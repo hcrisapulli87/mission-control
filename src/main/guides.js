@@ -136,6 +136,10 @@ const GUIDES = {
     step('Or run Disk Cleanup and tick "Clean up system files".', { commands: ['cleanmgr'] }),
     step('Big folders are often old node_modules in projects you no longer work on, game installs, and Downloads.')
   ],
+  'pc.driver': (r) => [
+    step(`Open NVIDIA App → Drivers and install ${r.details?.recommended?.find((d) => d.isUpdateAvailable)?.version ?? 'the update'} (Express install keeps your settings).`),
+    step('Close games first — the screen flickers for a few seconds while the driver swaps. If a game breaks afterwards, NVIDIA App → Drivers can roll back.')
+  ],
   'pc.restart': () => [step('Save your work and restart when convenient — updates finish installing during the restart.', { commands: ['start ms-settings:windowsupdate'] })],
 
   'net.internet': () => [
