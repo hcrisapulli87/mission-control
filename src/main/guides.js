@@ -6,6 +6,10 @@ import { join } from 'path'
 const GITHUB_USER = 'hcrisapulli87'
 
 const step = (text, extra = {}) => ({ text, ...extra })
+
+// Ambience also runs under pythonw, so stop only bot.py processes. '[.]' keeps the pattern from
+// matching the powershell process running this command.
+const STOP_BOT_PS = "Get-CimInstance Win32_Process | Where-Object CommandLine -match 'pythonw.exe.+-u bot[.]py' | Invoke-CimMethod -MethodName Terminate"
 // Every command line must work in BOTH Windows PowerShell 5.1 (the default
 // terminal) and cmd.exe: no && or ; chaining, and never start a line with a
 // quoted path (PowerShell just prints it). Multi-step fixes are separate lines.
@@ -40,7 +44,11 @@ const NOT_CONFIGURED = {
 }
 
 const GUIDES = {
-  'bot.process': (r, { bot }) => [
+  'bot.process': (r, { bot }) => r.status === 'warn' ? [
+    step('More than one copy of the bot is running, so commands can get two replies. Stop every bot process; the restart loop brings exactly one back in ~30s.', { commands: [`powershell -NoProfile -Command "${STOP_BOT_PS}"`] }),
+    step('Wait ~30 seconds, then press ↻ on "Bot process" — it should say Running.'),
+    step('Keeps coming back doubled? Two launchers are running — check the Startup folder has only ONE start-household-bot.vbs.', { commands: ['explorer shell:startup'] })
+  ] : [
     botStart(bot),
     step('Wait ~30 seconds, then press ↻ on "Bot process".'),
     step('Still not running? Open launcher.log and read the lines after the last "starting bot". A RefreshError / invalid_grant means a Google token died — follow the Bot Google auth fix.',
@@ -49,7 +57,7 @@ const GUIDES = {
   ],
   'bot.activity': (r, { bot }) => [
     step('If "Bot process" is also failing, fix that first — no process means no logs.'),
-    step('If the process IS running but silent, it may be stuck. Kill it; the restart loop relaunches it with fresh state in ~30s.', { commands: ['powershell -NoProfile -Command "Stop-Process -Name pythonw -Force"'] }),
+    step('If the process IS running but silent, it may be stuck. Kill it; the restart loop relaunches it with fresh state in ~30s.', { commands: [`powershell -NoProfile -Command "${STOP_BOT_PS}"`] }),
     step('If nothing comes back, start it directly.', { commands: [`wscript "${join(bot, 'launch_hidden.vbs')}"`] })
   ],
   'bot.crashloop': (r, { bot }) => [

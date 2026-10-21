@@ -1,18 +1,28 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseTasklist, parseLogTime, lastLogTime, countExits, findAuthError, activityVerdict
+  parseBotProcesses, parseLogTime, lastLogTime, countExits, findAuthError, activityVerdict
 } from '../src/main/checks/bot.js'
 
 const H = 3_600_000
 const local = (y, mo, d, h, mi, s = 0) => new Date(y, mo - 1, d, h, mi, s).getTime()
 
-describe('parseTasklist', () => {
-  it('counts pythonw processes', () => {
-    const csv = '"pythonw.exe","1234","Console","1","12,000 K"\r\n"pythonw.exe","5678","Console","1","40,000 K"\r\n'
-    expect(parseTasklist(csv)).toBe(2)
+describe('parseBotProcesses', () => {
+  const stub = { ProcessId: 10, ParentProcessId: 1, CommandLine: 'venv\Scripts\pythonw.exe  -u bot.py ' }
+  const child = { ProcessId: 11, ParentProcessId: 10, CommandLine: '"C:\Python312\pythonw.exe" -u bot.py ' }
+  const ambience = { ProcessId: 20, ParentProcessId: 2, CommandLine: '"C:\ambience\.venv\Scripts\pythonw.exe" -m ambience' }
+  it('venv stub + child is one instance', () => {
+    expect(parseBotProcesses(JSON.stringify([stub, child]))).toEqual({ processes: 2, instances: 1 })
+  })
+  it('ignores other pythonw apps', () => {
+    expect(parseBotProcesses(JSON.stringify([stub, child, ambience]))).toEqual({ processes: 2, instances: 1 })
+    expect(parseBotProcesses(JSON.stringify(ambience))).toEqual({ processes: 0, instances: 0 })
+  })
+  it('two separate launches are two instances', () => {
+    const stub2 = { ...stub, ProcessId: 30 }, child2 = { ...child, ProcessId: 31, ParentProcessId: 30 }
+    expect(parseBotProcesses(JSON.stringify([stub, child, stub2, child2])).instances).toBe(2)
   })
   it('none running', () => {
-    expect(parseTasklist('INFO: No tasks are running which match the specified criteria.')).toBe(0)
+    expect(parseBotProcesses('')).toEqual({ processes: 0, instances: 0 })
   })
 })
 

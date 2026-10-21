@@ -4,8 +4,18 @@ import { fmtDuration } from '../format.js'
 
 const H = 3_600_000
 
-export function parseTasklist(csv) {
-  return csv.split(/\r?\n/).filter((l) => /^"pythonw\.exe"/i.test(l)).length
+// Other apps (Ambience) also run under pythonw, so match on the command line, not the image name.
+const BOT_PROCS_PS = "Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe'\" | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress"
+
+// A venv launch is two processes (Scripts\pythonw.exe stub -> base interpreter child): a bot
+// process whose parent is also a bot process belongs to the same instance.
+export function parseBotProcesses(json) {
+  let list
+  try { list = JSON.parse(json || '[]') } catch { return { processes: 0, instances: 0 } }
+  if (!Array.isArray(list)) list = [list]
+  const bots = list.filter((p) => p && /\bbot\.py\b/i.test(p.CommandLine ?? ''))
+  const ids = new Set(bots.map((p) => p.ProcessId))
+  return { processes: bots.length, instances: bots.filter((p) => !ids.has(p.ParentProcessId)).length }
 }
 
 // Three timestamp styles appear in the bot's logs:
@@ -79,11 +89,11 @@ export const botChecks = [
     id: 'bot.process', area: 'bot', title: 'Bot process', intervalMs: 60_000,
     async run(ctx) {
       const bot = ctx.settings.paths.bot
-      const { stdout } = await ctx.exec('tasklist', ['/FI', 'IMAGENAME eq pythonw.exe', '/FO', 'CSV', '/NH'])
-      const n = parseTasklist(stdout)
-      return n > 0
-        ? result('ok', `Running (${n} pythonw process${n > 1 ? 'es' : ''})`, { details: { processes: n } })
-        : result('fail', 'Bot is not running', { details: { processes: 0 }, shortcuts: botShortcuts(bot) })
+      const { processes, instances } = parseBotProcesses((await ctx.powershell(BOT_PROCS_PS)).stdout)
+      if (instances === 0) return result('fail', 'Bot is not running', { details: { processes, instances }, shortcuts: botShortcuts(bot) })
+      return instances === 1
+        ? result('ok', 'Running', { details: { processes, instances } })
+        : result('warn', `${instances} bot instances running — messages may be answered twice`, { details: { processes, instances }, shortcuts: botShortcuts(bot) })
     }
   },
   {
