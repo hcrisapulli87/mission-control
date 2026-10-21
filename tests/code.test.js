@@ -62,6 +62,12 @@ describe('evaluateRepo', () => {
     expect(e.noremote).toBe(true)
     expect(e.unpushed).toEqual([])
   })
+  it('no remote but listed as local-only: not flagged', () => {
+    const e = evaluateRepo({ ...repo, hasOrigin: false }, now, 14, [repo.name])
+    expect(e.noremote).toBe(false)
+    expect(e.unpushed).toEqual([])
+    expect(evaluateRepo({ ...repo, hasOrigin: false }, now, 14, ['other']).noremote).toBe(true)
+  })
   it('non-git folder', () => {
     expect(evaluateRepo({ name: 'chordvault', git: false }, now, 14)).toMatchObject({ nogit: true, dirty: 0, unmerged: [] })
   })

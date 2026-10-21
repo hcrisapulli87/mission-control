@@ -142,6 +142,11 @@ export default function Settings() {
           <input defaultValue={settings.ignore.join(', ')} className={input}
             onBlur={(e) => save({ ignore: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
         </div>
+        <div className="grid grid-cols-[200px_1fr] items-center gap-3">
+          <span className="text-sm">Local-only repos (no GitHub)</span>
+          <input defaultValue={(settings.localOnly ?? []).join(', ')} className={input}
+            onBlur={(e) => save({ localOnly: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
+        </div>
       </Section>
 
       <Section title="Connections">

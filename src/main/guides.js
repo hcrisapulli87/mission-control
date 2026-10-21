@@ -81,6 +81,7 @@ const GUIDES = {
     step('To commit everything shown, run these one at a time (in the repo folder). Not sure what a change is? Ask Claude.', { commands: ['git add -A', 'git commit -m "your message"'] })
   ],
   'code.noremote': (r) => [
+    step('Keeping a repo off GitHub on purpose? Add its name to Settings → Local-only repos and this warning goes away.'),
     step('On GitHub create a new EMPTY repository with the same name (do not tick "Add a README" — an empty repo means a plain push works).', { url: 'https://github.com/new' }),
     ...repos(r).map((x) => step(`${x.name}:`, { commands: inDir(x.path, `git remote add origin https://github.com/${GITHUB_USER}/${x.name}.git`, 'git branch -M main', 'git push -u origin main') }))
   ],

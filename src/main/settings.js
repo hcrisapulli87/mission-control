@@ -10,9 +10,11 @@ export const DEFAULTS = {
   },
   ignore: ['node_modules', 'docs', 'memory', '.claude', '.superpowers', '.playwright-mcp',
     'everafter-redesign-extract', 'mission-control-data'],
+  // Repos kept off GitHub on purpose: no "Repos without a remote" warning for these.
+  localOnly: ['(workspace)', 'ambience', 'cinevault', 'discord-household-bot', 'game-backlog', 'keyvault',
+    'pokemon-portfolio', 'pricewatch', 'retro-hub', 'chordvault', 'docvault'],
   oauthTesting: true,
   startWithWindows: false,
-  vercelTeamId: '',
   vercelTeamId: '',
   thresholds: {
     botActivityWarnH: 12,

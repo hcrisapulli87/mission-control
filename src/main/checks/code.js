@@ -24,7 +24,7 @@ export function isProject({ name, files }, ignore) {
 }
 
 /** Every concern for one repo. Merged branches never count as unpushed or unmerged. */
-export function evaluateRepo(repo, now, staleDays) {
+export function evaluateRepo(repo, now, staleDays, localOnly = []) {
   if (!repo.git) return { name: repo.name, nogit: true, dirty: 0, noremote: false, unpushed: [], unmerged: [], stale: [] }
   const merged = new Set(repo.merged)
   const unmerged = repo.branches.filter((b) => b.name !== repo.mainBranch && !merged.has(b.name))
@@ -35,7 +35,7 @@ export function evaluateRepo(repo, now, staleDays) {
     name: repo.name,
     nogit: false,
     dirty: repo.dirty,
-    noremote: !repo.hasOrigin,
+    noremote: !repo.hasOrigin && !localOnly.includes(repo.name),
     unpushed,
     unmerged: unmerged.map((b) => b.name),
     stale: unmerged.filter((b) => now - b.ts > staleDays * DAY).map((b) => b.name)
@@ -95,7 +95,7 @@ async function doScan(ctx) {
     const info = c.files.includes('.git')
       ? await inspectRepo(ctx, c.name, c.path)
       : { name: c.name, path: c.path, git: false }
-    out.push({ ...evaluateRepo(info, ctx.now(), ctx.settings.thresholds.staleBranchDays), path: c.path })
+    out.push({ ...evaluateRepo(info, ctx.now(), ctx.settings.thresholds.staleBranchDays, ctx.settings.localOnly ?? []), path: c.path })
   }
   return out
 }
