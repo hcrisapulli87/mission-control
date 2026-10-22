@@ -15,7 +15,7 @@ const SECRETS = [
 
 const THRESHOLDS = [
   ['botActivityWarnH', 'Bot quiet → warn (hours)'], ['botActivityFailH', 'Bot quiet → fail (hours)'],
-  ['crashLoopExits', 'Crash loop: exits per hour'], ['tokenWarnDays', 'Token warning (days left)'],
+  ['crashLoopExits', 'Crash loop: exits per hour'],
   ['staleBranchDays', 'Stale branch (days)'], ['gpuWarn', 'GPU warn (°C)'], ['gpuFail', 'GPU fail (°C)'],
   ['cpuWarn', 'CPU warn (%)'], ['ramWarn', 'RAM warn (%)'], ['sustainedSamples', 'Sustained minutes'],
   ['diskWarnPct', 'Disk free warn (%)'], ['diskFailPct', 'Disk free fail (%)'], ['uptimeWarnDays', 'Uptime warn (days)'],
@@ -125,10 +125,6 @@ export default function Settings() {
         <label className="flex items-center gap-3 text-sm">
           <input type="checkbox" checked={state.startWithWindows} onChange={(e) => save({ startWithWindows: e.target.checked })} />
           Start with Windows (tray only)
-        </label>
-        <label className="flex items-center gap-3 text-sm">
-          <input type="checkbox" checked={settings.oauthTesting} onChange={(e) => save({ oauthTesting: e.target.checked })} />
-          Google OAuth app is in Testing mode (refresh tokens expire after 7 days)
         </label>
         {[['root', 'Projects folder'], ['bot', 'Discord bot folder']].map(([k, label]) => (
           <div key={k} className="grid grid-cols-[200px_1fr] items-center gap-3">

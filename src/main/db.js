@@ -81,6 +81,16 @@ export function openDb({ SQL, load, save, onCorrupt }) {
           JSON.stringify(r.shortcuts ?? []), r.checkedAt, r.error ?? null]
       )
     },
+    /** Drop saved results/alerts for checks that no longer exist (removed in an update). */
+    forgetChecksExcept(ids) {
+      const keep = new Set(ids)
+      const gone = all('SELECT check_id FROM results').map((r) => r.check_id).filter((id) => !keep.has(id))
+      for (const id of gone) {
+        run('DELETE FROM results WHERE check_id=?', [id])
+        run('DELETE FROM alerts WHERE check_id=?', [id])
+      }
+      return gone
+    },
     getResults() {
       return all('SELECT * FROM results ORDER BY check_id').map((r) => ({
         id: r.check_id, area: r.area, title: r.title, status: r.status, summary: r.summary,

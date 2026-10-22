@@ -33,6 +33,7 @@ async function readTail(path, bytes) {
 export const fs = {
   exists: (p) => existsSync(p),
   readFile: (p) => fsp.readFile(p, 'utf8'),
+  readBuffer: (p) => fsp.readFile(p),
   readTail,
   stat: (p) => fsp.stat(p),
   readdir: (p) => fsp.readdir(p, { withFileTypes: true }),

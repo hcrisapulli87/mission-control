@@ -21,18 +21,24 @@ function botStart(bot) {
   return step('Start the bot (paste into a terminal — it runs hidden).', { commands: [`wscript "${join(bot, 'launch_hidden.vbs')}"`] })
 }
 
-function reauth(bot, files) {
-  const which = files?.length ? files.join(', ') : 'the token_*.json named in the error (or all three if unsure)'
+function botStartupFix(r, bot) {
+  const d = r.details ?? {}
+  if (d.entries?.length === 0 && d.startupDir) {
+    return [
+      step('Nothing in the Startup folder launches the bot. Put the launcher back (copies the bot\'s own hidden launcher into Startup):',
+        { commands: [`copy "${join(bot, 'launch_hidden.vbs')}" "${join(d.startupDir, 'start-household-bot.vbs')}"`] }),
+      step('Press ↻ on this check — it should say Enabled. If the bot is not running right now, start it too:',
+        { commands: [`wscript "${join(bot, 'launch_hidden.vbs')}"`] })
+    ]
+  }
+  const name = d.entry?.name ?? 'start-household-bot.vbs'
   return [
-    step('Stop the bot and its restart loop.', { commands: [runBat(join(bot, 'stop_bot.bat'))] }),
-    step(`In the bot folder, delete ${which}. Only the token files — leave credentials.json and .env alone.`,
-      { shortcut: { kind: 'openPath', label: 'Open bot folder', path: bot } }),
-    step('Run the bot once in a visible terminal. A browser window opens for each deleted token — sign in and click Allow.',
-      { commands: inDir(bot, 'venv\\Scripts\\python.exe bot.py') }),
-    step('When it prints "Bot is online", press Ctrl+C in that terminal, then start it normally (hidden).',
+    step('Open Task Manager and go to Startup apps.', { commands: ['taskmgr'] }),
+    step(`.vbs files are listed as "Microsoft ® Windows Based Script Host", not by name. Right-click any column header and tick "Command line", then find the row whose command line ends in ${name}.`),
+    step('Right-click it → Enable. (Leave the mission-control.vbs row enabled too.)'),
+    step('Press ↻ on this check. The bot only needs starting by hand if "Bot process" is also red:',
       { commands: [`wscript "${join(bot, 'launch_hidden.vbs')}"`] }),
-    step('Press ↻ on the Bot checks. Tokens die every 7 days while the Google OAuth app is in "Testing" — publishing it in Google Cloud Console (OAuth consent screen → Publish app) stops this; then untick Testing mode in Settings.',
-      { shortcut: { kind: 'openUrl', label: 'OAuth consent screen', url: 'https://console.cloud.google.com/apis/credentials/consent' } })
+    step('If it gets switched off again without you doing it, a "startup booster" (Armoury Crate, Razer Synapse, a PC optimiser) may be disabling startup items — check its settings.')
   ]
 }
 
@@ -51,9 +57,9 @@ const GUIDES = {
   ] : [
     botStart(bot),
     step('Wait ~30 seconds, then press ↻ on "Bot process".'),
-    step('Still not running? Open launcher.log and read the lines after the last "starting bot". A RefreshError / invalid_grant means a Google token died — follow the Bot Google auth fix.',
+    step('Still not running? Open launcher.log and read the lines after the last "starting bot" — the error there says why it exits. Not obvious? Ask Claude below.',
       { shortcut: { kind: 'openPath', label: 'Open launcher.log', path: join(bot, 'logs', 'launcher.log') } }),
-    step('If it runs now but did not come back after a reboot, check the Startup folder still has start-household-bot.vbs.', { commands: ['explorer shell:startup'] })
+    step('If it runs now but did not come back after a reboot, look at "Bot starts with Windows" — its startup entry may be switched off.')
   ],
   'bot.activity': (r, { bot }) => [
     step('If "Bot process" is also failing, fix that first — no process means no logs.'),
@@ -63,12 +69,11 @@ const GUIDES = {
   'bot.crashloop': (r, { bot }) => [
     step('Stop the loop so it stops hammering.', { commands: [runBat(join(bot, 'stop_bot.bat'))] }),
     step('Open launcher.log and read the error after the last "starting bot".', { shortcut: { kind: 'openPath', label: 'Open launcher.log', path: join(bot, 'logs', 'launcher.log') } }),
-    step('RefreshError / invalid_grant → follow the Bot Google auth fix. ModuleNotFoundError → reinstall packages:', { commands: inDir(bot, 'venv\\Scripts\\pip install -r requirements.txt') }),
+    step('ModuleNotFoundError → reinstall the bot\'s packages:', { commands: inDir(bot, 'venv\\Scripts\\pip install -r requirements.txt') }),
     botStart(bot),
     step('Any other traceback → use Ask Claude below; it gets the log context.')
   ],
-  'bot.auth': (r, { bot }) => reauth(bot, null),
-  'google.tokens': (r, { bot }) => reauth(bot, (r.details?.tokens ?? []).filter((t) => t.status !== 'ok').map((t) => t.file)),
+  'bot.startup': (r, { bot }) => botStartupFix(r, bot),
 
   'code.nogit': (r) => [
     step('Check the project has a .gitignore that excludes node_modules/, out/, dist/ and any .env before the first commit.'),
@@ -195,7 +200,7 @@ export function guideFor(result, paths) {
 
 /** Folder Claude Code should open in for this problem. */
 export function assistCwd(result, paths) {
-  if (result.area === 'bot' || result.id.startsWith('bot.') || result.id === 'google.tokens') return paths.bot
+  if (result.area === 'bot' || result.id.startsWith('bot.')) return paths.bot
   const rs = result.details?.repos ?? result.details?.audits ?? []
   if (rs.length === 1 && rs[0].path) return rs[0].path
   return paths.root

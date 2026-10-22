@@ -93,6 +93,8 @@ async function boot() {
   const launchVbs = join(app.getAppPath(), 'launch.vbs')
 
   // Last known status per check, to detect transitions.
+  // Checks removed in an update would otherwise sit on the dashboard forever, frozen.
+  if (db.forgetChecksExcept(allChecks.map((c) => c.id)).length) db.persist()
   const last = new Map(db.getResults().map((r) => [r.id, r.status]))
   const titles = new Map(allChecks.map((c) => [c.id, c.title]))
 

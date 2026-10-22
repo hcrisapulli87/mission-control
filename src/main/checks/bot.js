@@ -52,18 +52,46 @@ export function countExits(text, now, windowMs) {
   }).length
 }
 
-const AUTH = /invalid_grant|RefreshError|_authenticate/
+// ---------- Startup entry ----------
+// Windows keeps each Startup-folder item's on/off switch (Task Manager → Startup apps)
+// in this key: byte 0 odd = disabled, bytes 4-11 = FILETIME of the last toggle.
+// No value at all means the item was never toggled, i.e. enabled.
+const STARTUP_APPROVED = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\StartupFolder'
+const FILETIME_EPOCH_MS = 11_644_473_600_000n
 
-/** Auth error text from the most recent bot start, if that start is recent. */
-export function findAuthError(text, now, windowMs) {
-  const ls = lines(text)
-  let start = -1
-  for (let i = ls.length - 1; i >= 0; i--) if (ls[i].includes('starting bot')) { start = i; break }
-  if (start < 0) return null
-  const t = parseLogTime(ls[start])
-  if (t == null || t < now - windowMs) return null
-  const hit = ls.slice(start + 1).find((l) => AUTH.test(l))
-  return hit ? hit.trim() : null
+/** `reg query <key>` output → { [valueName]: { enabled, changedAt } }. */
+export function parseStartupApproved(text) {
+  const out = {}
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s{2,}(.+?)\s+REG_BINARY\s+([0-9A-F]+)\s*$/i.exec(line)
+    if (!m) continue
+    const bytes = Buffer.from(m[2], 'hex')
+    let changedAt = null
+    if (bytes.length >= 12) {
+      const ft = bytes.readBigUInt64LE(4)
+      if (ft > 0n) changedAt = Number(ft / 10_000n - FILETIME_EPOCH_MS)
+    }
+    out[m[1]] = { enabled: (bytes[0] & 1) === 0, changedAt }
+  }
+  return out
+}
+
+/**
+ * Which Startup-folder files launch the bot: their contents mention the bot folder.
+ * `files` = [{ name, text }] (.lnk targets are stored as UTF-16, so callers pass both decodings).
+ */
+export function findBotStartupEntries(files, botPath) {
+  const needle = botPath.toLowerCase().replace(/[\\/]+$/, '')
+  return files.filter((f) => /\.(vbs|bat|cmd|lnk)$/i.test(f.name) && f.text.toLowerCase().includes(needle)).map((f) => f.name)
+}
+
+/** Verdict for the bot's startup entries given their on/off state. */
+export function startupVerdict(entries, approved) {
+  if (!entries.length) return { status: 'fail', reason: 'missing' }
+  const states = entries.map((name) => ({ name, ...(approved[name] ?? { enabled: true, changedAt: null }) }))
+  const on = states.find((s) => s.enabled)
+  if (on) return { status: 'ok', entry: on }
+  return { status: 'fail', reason: 'disabled', entry: states.sort((a, b) => (b.changedAt ?? 0) - (a.changedAt ?? 0))[0] }
 }
 
 export function activityVerdict(lastTs, now, t) {
@@ -127,15 +155,30 @@ export const botChecks = [
     }
   },
   {
-    id: 'bot.auth', area: 'bot', title: 'Bot Google auth', intervalMs: 5 * 60_000,
+    // Caught too late on 2026-09-29: the entry was switched off and the bot silently
+    // stayed down for three weeks of reboots. This turns that into a same-day alert.
+    id: 'bot.startup', area: 'bot', title: 'Bot starts with Windows', intervalMs: 15 * 60_000,
     async run(ctx) {
       const bot = ctx.settings.paths.bot
-      const text = await tail(ctx, join(bot, 'logs', 'launcher.log'), 256 * 1024)
-      if (text == null) return unknown('launcher.log not found')
-      const hit = findAuthError(text, ctx.now(), H)
-      return hit
-        ? result('fail', 'Google token dead — re-auth the bot', { details: { line: hit }, shortcuts: botShortcuts(bot) })
-        : result('ok', 'No auth errors since last start')
+      const startupDir = join(process.env.APPDATA ?? '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+      if (!ctx.fs.exists(startupDir)) return unknown('Startup folder not found')
+      const files = []
+      for (const e of await ctx.fs.readdir(startupDir)) {
+        if (!e.isFile() || !/\.(vbs|bat|cmd|lnk)$/i.test(e.name)) continue
+        const buf = await ctx.fs.readBuffer(join(startupDir, e.name))
+        files.push({ name: e.name, text: buf.toString('latin1') + buf.toString('utf16le') })
+      }
+      const entries = findBotStartupEntries(files, bot)
+      const approved = parseStartupApproved((await ctx.exec('reg', ['query', STARTUP_APPROVED])).stdout)
+      const v = startupVerdict(entries, approved)
+      const details = { startupDir, entries, entry: v.entry ?? null }
+      const shortcuts = [{ kind: 'openPath', label: 'Open Startup folder', path: startupDir }]
+      if (v.status === 'ok') return result('ok', `Enabled (${v.entry.name})`, { details })
+      if (v.reason === 'missing') {
+        return result('fail', 'No Startup entry launches the bot — it won\'t start after a reboot', { details, shortcuts })
+      }
+      const when = v.entry.changedAt ? ` on ${new Date(v.entry.changedAt).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}` : ''
+      return result('fail', `Startup entry switched off${when} — bot won't start after a reboot`, { details, shortcuts })
     }
   }
 ]

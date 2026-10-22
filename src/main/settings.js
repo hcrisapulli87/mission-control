@@ -13,14 +13,12 @@ export const DEFAULTS = {
   // Repos kept off GitHub on purpose: no "Repos without a remote" warning for these.
   localOnly: ['(workspace)', 'ambience', 'cinevault', 'discord-household-bot', 'game-backlog', 'keyvault',
     'pokemon-portfolio', 'pricewatch', 'retro-hub', 'chordvault', 'docvault', 'firecube-launcher'],
-  oauthTesting: true,
   startWithWindows: false,
   vercelTeamId: '',
   thresholds: {
     botActivityWarnH: 12,
     botActivityFailH: 48,
     crashLoopExits: 3,
-    tokenWarnDays: 2,
     staleBranchDays: 14,
     gpuWarn: 80,
     gpuFail: 88,

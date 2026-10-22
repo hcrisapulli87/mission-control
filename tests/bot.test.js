@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseBotProcesses, parseLogTime, lastLogTime, countExits, findAuthError, activityVerdict
+  parseBotProcesses, parseLogTime, lastLogTime, countExits, activityVerdict,
+  parseStartupApproved, findBotStartupEntries, startupVerdict
 } from '../src/main/checks/bot.js'
 
 const H = 3_600_000
@@ -60,18 +61,54 @@ describe('countExits', () => {
   })
 })
 
-describe('findAuthError', () => {
-  it('finds auth errors after the most recent start', () => {
-    const text = launcher + '\r\n[Mon 19/10/2026 09:12:03.00] starting bot \r\n    self.service = self._authenticate()\r\nRefreshError: invalid_grant'
-    expect(findAuthError(text, local(2026, 10, 19, 9, 30), H)).toMatch(/invalid_grant|_authenticate|RefreshError/)
+// Real `reg query` output captured on Harrison's PC (the .vbs value is the one from the
+// 2026-09-29 outage: switched off at 2:28:28 pm AEST).
+const REG = [
+  '',
+  'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\StartupFolder',
+  '    start-household-bot.bat    REG_BINARY    020000000000000000000000',
+  '    start-household-bot.vbs    REG_BINARY    030000004F6B06FACA4FDD01',
+  '    mission-control.vbs    REG_BINARY    020000000000000000000000',
+  ''
+].join('\r\n')
+
+describe('parseStartupApproved', () => {
+  it('reads on/off and when it was switched', () => {
+    const a = parseStartupApproved(REG)
+    expect(a['start-household-bot.vbs']).toEqual({ enabled: false, changedAt: Date.parse('2026-09-29T04:28:28.769Z') })
+    expect(a['mission-control.vbs']).toEqual({ enabled: true, changedAt: null })
   })
-  it('ignores old errors once a later start ran clean', () => {
-    const text = launcher + '\r\n[Mon 19/10/2026 09:12:03.00] starting bot \r\n[2026-10-19 09:12:05] [INFO    ] discord.client: logging in'
-    expect(findAuthError(text, local(2026, 10, 19, 9, 30), H)).toBeNull()
+  it('treats 06/07 style values by the low bit', () => {
+    const a = parseStartupApproved('    x.lnk    REG_BINARY    070000000000000000000000\r\n    y.lnk    REG_BINARY    060000000000000000000000')
+    expect(a['x.lnk'].enabled).toBe(false)
+    expect(a['y.lnk'].enabled).toBe(true)
   })
-  it('ignores errors older than the window', () => {
-    const text = '[Mon 19/10/2026 01:00:00.00] starting bot \r\nRefreshError: invalid_grant'
-    expect(findAuthError(text, local(2026, 10, 19, 9, 30), H)).toBeNull()
+})
+
+describe('findBotStartupEntries', () => {
+  const bot = 'C:\\Users\\H\\claudecode\\discord-household-bot'
+  it('matches files that launch the bot folder, case-insensitively', () => {
+    const files = [
+      { name: 'start-household-bot.vbs', text: 'WshShell.Run """C:\\users\\h\\claudecode\\Discord-Household-Bot\\start_bot.bat""", 0' },
+      { name: 'mission-control.vbs', text: 'WshShell.Run "wscript.exe ""C:\\Users\\H\\claudecode\\mission-control\\launch.vbs"""' },
+      { name: 'desktop.ini', text: bot }
+    ]
+    expect(findBotStartupEntries(files, bot)).toEqual(['start-household-bot.vbs'])
+  })
+})
+
+describe('startupVerdict', () => {
+  const approved = parseStartupApproved(REG)
+  it('fails when the only entry is switched off, with when', () => {
+    expect(startupVerdict(['start-household-bot.vbs'], approved))
+      .toEqual({ status: 'fail', reason: 'disabled', entry: { name: 'start-household-bot.vbs', enabled: false, changedAt: Date.parse('2026-09-29T04:28:28.769Z') } })
+  })
+  it('ok when any entry is on; never-toggled counts as on', () => {
+    expect(startupVerdict(['start-household-bot.vbs', 'start-household-bot.bat'], approved).status).toBe('ok')
+    expect(startupVerdict(['new-entry.vbs'], approved)).toEqual({ status: 'ok', entry: { name: 'new-entry.vbs', enabled: true, changedAt: null } })
+  })
+  it('fails when nothing launches the bot', () => {
+    expect(startupVerdict([], approved)).toEqual({ status: 'fail', reason: 'missing' })
   })
 })
 

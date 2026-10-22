@@ -21,6 +21,17 @@ describe('db', () => {
     expect(rows[0]).toMatchObject({ id: 'bot.process', status: 'ok', summary: 'up', checkedAt: 6, shortcuts: [] })
   })
 
+  it('forgets results and alerts of checks that were removed', () => {
+    const { db } = mk()
+    const base = { area: 'bot', title: 't', status: 'fail', summary: '', details: {}, shortcuts: [], checkedAt: 1 }
+    db.saveResult({ ...base, id: 'bot.process' })
+    db.saveResult({ ...base, id: 'google.tokens' })
+    db.setAlert('google.tokens', { lastNotifiedAt: 1, mutedUntil: 0, muteUntilRecover: false })
+    expect(db.forgetChecksExcept(['bot.process', 'bot.startup'])).toEqual(['google.tokens'])
+    expect(db.getResults().map((r) => r.id)).toEqual(['bot.process'])
+    expect(db.getAlerts()).toEqual({})
+  })
+
   it('events get increasing ids even after persist', () => {
     const { db, saved } = mk()
     const a = db.addEvent({ kind: 'transition', checkId: 'x', from: 'ok', to: 'fail', ts: 1 })

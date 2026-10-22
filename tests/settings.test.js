@@ -41,10 +41,10 @@ describe('secrets', () => {
 
 describe('settings', () => {
   it('deep merges overrides onto defaults', () => {
-    const s = resolveSettings({ thresholds: { gpuWarn: 75 }, oauthTesting: false }, { get: () => null })
+    const s = resolveSettings({ thresholds: { gpuWarn: 75 }, startWithWindows: true }, { get: () => null })
     expect(s.thresholds.gpuWarn).toBe(75)
     expect(s.thresholds.gpuFail).toBe(DEFAULTS.thresholds.gpuFail)
-    expect(s.oauthTesting).toBe(false)
+    expect(s.startWithWindows).toBe(true)
     expect(s.paths.root).toBe(DEFAULTS.paths.root)
   })
   it('exposes secrets via getter', () => {

@@ -15,14 +15,18 @@ describe('guideFor', () => {
     expect(commands(g)).toContain('wscript "C:\\cc\\bot\\launch_hidden.vbs"')
   })
 
-  it('expired tokens: names the exact token files to delete', () => {
-    const g = guideFor(r('google.tokens', 'fail', {
-      details: { tokens: [{ file: 'token_gmail.json', status: 'fail' }, { file: 'token_tasks.json', status: 'ok' }] }
+  it('startup entry switched off: Task Manager steps naming the entry', () => {
+    const g = guideFor(r('bot.startup', 'fail', {
+      details: { startupDir: 'C:\\S', entries: ['start-household-bot.vbs'], entry: { name: 'start-household-bot.vbs', enabled: false } }
     }), paths)
-    const text = g.steps.map((s) => s.text).join(' ')
-    expect(text).toContain('token_gmail.json')
-    expect(text).not.toContain('token_tasks.json')
-    expect(commands(g)).toContain('cmd /c "C:\\cc\\bot\\stop_bot.bat"')
+    expect(commands(g)).toContain('taskmgr')
+    expect(g.steps.map((s) => s.text).join(' ')).toContain('Windows Based Script Host')
+    expect(g.steps.map((s) => s.text).join(' ')).toContain('start-household-bot.vbs')
+  })
+
+  it('startup entry missing: copies the launcher back into the Startup folder', () => {
+    const g = guideFor(r('bot.startup', 'fail', { details: { startupDir: 'C:\\S', entries: [], entry: null } }), paths)
+    expect(commands(g)).toContain('copy "C:\\cc\\bot\\launch_hidden.vbs" "C:\\S\\start-household-bot.vbs"')
   })
 
   it('unpushed: plain push vs first push with upstream', () => {
@@ -49,7 +53,7 @@ describe('guideFor', () => {
   })
 
   it('every command works in both PowerShell 5.1 and cmd.exe', () => {
-    const ids = ['bot.process', 'bot.activity', 'bot.crashloop', 'bot.auth', 'google.tokens', 'code.nogit', 'code.dirty',
+    const ids = ['bot.process', 'bot.activity', 'bot.crashloop', 'bot.startup', 'code.nogit', 'code.dirty',
       'code.noremote', 'code.unpushed', 'code.branches', 'code.audit', 'cloud.vercel', 'cloud.uptime', 'cloud.supabase',
       'cloud.apikeys', 'pc.gpu', 'pc.cpu', 'pc.ram', 'pc.disks', 'pc.restart', 'net.internet', 'net.gateway', 'net.speed', 'net.devices']
     const details = { repos: [{ name: 'a', path: 'C:\\cc\\a', dirty: 1, unpushed: [{ branch: 'main', ahead: 1 }], unmerged: ['f'], stale: [] }],
@@ -74,7 +78,7 @@ describe('guideFor', () => {
   })
 
   it('every check id has a guide for fail', () => {
-    const ids = ['bot.process', 'bot.activity', 'bot.crashloop', 'bot.auth', 'google.tokens', 'code.nogit', 'code.dirty',
+    const ids = ['bot.process', 'bot.activity', 'bot.crashloop', 'bot.startup', 'code.nogit', 'code.dirty',
       'code.noremote', 'code.unpushed', 'code.branches', 'code.audit', 'cloud.vercel', 'cloud.uptime', 'cloud.supabase',
       'cloud.apikeys', 'pc.gpu', 'pc.cpu', 'pc.ram', 'pc.disks', 'pc.restart', 'net.internet', 'net.gateway', 'net.speed', 'net.devices']
     for (const id of ids) expect(guideFor(r(id, 'fail'), paths)?.steps.length, id).toBeGreaterThan(0)
@@ -83,7 +87,7 @@ describe('guideFor', () => {
 
 describe('assistCwd', () => {
   it('bot checks open in the bot folder, single-repo checks in that repo, else root', () => {
-    expect(assistCwd(r('bot.auth', 'fail'), paths)).toBe('C:\\cc\\bot')
+    expect(assistCwd(r('bot.startup', 'fail'), paths)).toBe('C:\\cc\\bot')
     expect(assistCwd(r('code.dirty', 'warn', { details: { repos: [{ path: 'C:\\cc\\tally' }] } }), paths)).toBe('C:\\cc\\tally')
     expect(assistCwd(r('code.dirty', 'warn', { details: { repos: [{ path: 'a' }, { path: 'b' }] } }), paths)).toBe('C:\\cc')
     expect(assistCwd(r('pc.gpu', 'warn'), paths)).toBe('C:\\cc')

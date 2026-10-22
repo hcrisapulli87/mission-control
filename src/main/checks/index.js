@@ -1,5 +1,4 @@
 import { botChecks } from './bot.js'
-import { tokenChecks } from './tokens.js'
 import { codeChecks } from './code.js'
 import { auditChecks } from './audit.js'
 import { cloudChecks } from './cloud.js'
@@ -15,6 +14,6 @@ export const AREAS = [
 ]
 
 export const allChecks = [
-  ...botChecks, ...tokenChecks, ...codeChecks, ...auditChecks,
+  ...botChecks, ...codeChecks, ...auditChecks,
   ...cloudChecks, ...pcChecks, ...netChecks
 ]

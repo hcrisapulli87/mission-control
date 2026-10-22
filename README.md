@@ -1,7 +1,7 @@
 # Mission Control
 
 A system-tray dashboard that watches everything Harrison runs: the Discord household
-bot and its Google tokens, every project in `claudecode/`, Vercel/Supabase/API keys,
+bot (and whether it will start with Windows), every project in `claudecode/`, Vercel/Supabase/API keys,
 PC health, and the home network. Windows notification when something **starts**
 failing; a reminder once a day while it stays broken.
 
@@ -36,7 +36,7 @@ scheduler (main) ──run(ctx)──▶ check modules ──▶ { status, summa
 
 | Area | Checks |
 |---|---|
-| Discord bot | process running, log activity, crash loop, Google auth errors, refresh-token 7-day countdown |
+| Discord bot | process running, log activity, crash loop, startup entry still enabled in Windows Startup apps |
 | Code | projects without git, uncommitted changes, no remote, unpushed work, unmerged/stale branches, `npm audit --omit=dev` |
 | Cloud | Vercel production deploys, site uptime + latency, Supabase status + DB size vs 500 MB, API key validity (eBay quota) |
 | PC | GPU temp/load (nvidia-smi), GPU driver update + release notes (NVIDIA App), CPU, RAM, disk space + health, pending restart / long uptime |
